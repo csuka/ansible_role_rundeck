@@ -1,0 +1,10 @@
+---
+- name: systemd daemon reload
+  systemd:
+    daemon_reload: true
+  notify: restart rundeck
+
+- name: restart rundeck
+  service:
+    name: rundeck
+    state: restarted

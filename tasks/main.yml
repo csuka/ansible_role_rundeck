@@ -1,0 +1,127 @@
+---
+- name: ensure wget and java openjdk are installed
+  dnf:
+    name: "{{ item.name }}"
+    state: present
+  environment:
+    USE: "{{ item.env }}"
+  loop:
+    - name: wget
+      env: ""
+    - name: java-11-openjdk
+      env: X -cups -alsa -fontconfig
+
+- name: find JAVA_HOME
+  shell: set -o pipefail ; readlink -f /usr/bin/java | sed 's%/bin/java%%'
+  args:
+    executable: /bin/sh
+  changed_when: false
+  check_mode: false
+  register: java_home
+
+- name: set JAVA_HOME in /etc/environment
+  lineinfile:
+    create: true
+    path: /etc/profile.d/java_home.sh
+    regexp: '^export JAVA_HOME='
+    line: 'export JAVA_HOME="{{ java_home.stdout }}"'
+    mode: '0644'
+
+- name: create rundeck directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ rundeck_rdeckbase }}"
+    - "{{ rundeck_rdeckbase }}/etc"
+
+- name: download rundeck
+  shell: >-
+    wget --content-disposition {{ rundeck_download_url }} -O
+    {{ rundeck_rdeckbase }}/rundeck-{{ rundeck_version }}-
+    {{- rundeck_release_date }}.war
+  args:
+    creates: >-
+      {{ rundeck_rdeckbase }}/rundeck-{{ rundeck_version -}}-
+      {{- rundeck_release_date -}}.war
+    warn: false
+
+- name: install rundeck with java
+  shell: "java -jar {{ rundeck_war }} --installonly"
+  args:
+    chdir: "{{ rundeck_rdeckbase }}"
+    creates: "{{ rundeck_rdeckbase }}/server"
+
+- name: configure rundeck systemd service
+  template:
+    src: rundeck.service.j2
+    dest: /etc/systemd/system/rundeck.service
+    mode: '0644'
+  notify: systemd daemon reload
+
+- name: configure rundeck properties
+  lineinfile:
+    dest: "{{ rundeck_rdeckbase }}/server/config/rundeck-config.properties"
+    line: "{{ item.parameter }} = {{ item.value }}"
+    regexp: "^{{ item.parameter }}"
+    create: true
+    mode: '0644'
+  notify: restart rundeck
+  loop: "{{ rundeck_config }}"
+  loop_control:
+    label: "{{ item.parameter }}"
+
+- name: configure rundeck framework
+  lineinfile:
+    dest: "{{ rundeck_rdeckbase }}/etc/framework.properties"
+    line: "{{ item.parameter }} = {{ item.value }}"
+    regexp: "^{{ item.parameter }}"
+    create: true
+    mode: '0644'
+  notify: restart rundeck
+  loop: "{{ rundeck_framework }}"
+  loop_control:
+    label: "{{ item.parameter }}"
+
+- name: configure profile
+  template:
+    src: profile.sh.j2
+    dest: /etc/profile.d/rundeck.sh
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart rundeck
+
+- name: configure rundeck policy
+  template:
+    src: admin.aclpolicy.j2
+    dest: "{{ rundeck_rdeckbase }}/etc/admin.aclpolicy"
+    mode: '0644'
+  notify: restart rundeck
+
+- name: configure rundeck default users
+  template:
+    src: realm.properties.j2
+    dest: "{{ rundeck_rdeckbase }}/server/config/realm.properties"
+    mode: '0644'
+  notify: restart rundeck
+
+- name: create /opt/rundeck/libext
+  file:
+    path: /opt/rundeck/libext
+    state: directory
+    mode: '0755'
+
+- name: install plugins
+  get_url:
+    url: "{{ item }}"
+    dest: /opt/rundeck/libext
+  loop: "{{ rundeck_plugins }}"
+  when: rundeck_plugins is defined
+
+- name: ensure rundeck is started and enabled
+  service:
+    name: rundeck
+    state: started
+    enabled: true

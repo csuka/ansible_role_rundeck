@@ -1,0 +1,11 @@
+{{ ansible_managed | comment }}
+
+[Unit]
+Description=Rundeck
+
+[Service]
+WorkingDirectory={{ rundeck_rdeckbase }}
+ExecStart={{ rundeck_java_home }}/bin/java -Xmx{{ rundeck_xmx }}m -jar rundeck-{{ rundeck_version }}-{{ rundeck_release_date }}.war
+
+[Install]
+WantedBy=multi-user.target
