@@ -53,14 +53,14 @@
     chdir: "{{ rundeck_rdeckbase }}"
     creates: "{{ rundeck_rdeckbase }}/server"
 
-- name: configure rundeck systemd service
+- name: configure systemd service
   template:
     src: rundeck.service.j2
     dest: /etc/systemd/system/rundeck.service
     mode: '0644'
   notify: systemd daemon reload
 
-- name: configure rundeck properties
+- name: configure properties
   lineinfile:
     dest: "{{ rundeck_rdeckbase }}/server/config/rundeck-config.properties"
     line: "{{ item.parameter }} = {{ item.value }}"
@@ -72,7 +72,7 @@
   loop_control:
     label: "{{ item.parameter }}"
 
-- name: configure rundeck framework
+- name: configure framework
   lineinfile:
     dest: "{{ rundeck_rdeckbase }}/etc/framework.properties"
     line: "{{ item.parameter }} = {{ item.value }}"
@@ -93,23 +93,23 @@
     mode: '0644'
   notify: restart rundeck
 
-- name: configure rundeck policy
+- name: configure policy
   template:
     src: admin.aclpolicy.j2
     dest: "{{ rundeck_rdeckbase }}/etc/admin.aclpolicy"
     mode: '0644'
   notify: restart rundeck
 
-- name: configure rundeck default users
+- name: configure default users
   template:
     src: realm.properties.j2
     dest: "{{ rundeck_rdeckbase }}/server/config/realm.properties"
     mode: '0644'
   notify: restart rundeck
 
-- name: create /opt/rundeck/libext
+- name: create libext folder
   file:
-    path: /opt/rundeck/libext
+    path: "{{ rundeck_rdeckbase }}/libext"
     state: directory
     mode: '0755'
 
